@@ -15,11 +15,17 @@ def transform_products():
 
     print("Starting product transformation...")
 
+
     # Load the original JSON data.
     df = pd.read_json(INPUT_FILE)
 
+    # Validate that the dataset contains products before accessing columns.
+    if df.empty:
+        raise ValueError("The dataset contains no products.")
+
     # Separate the nested rating information into two columns.
     rating = pd.json_normalize(df.pop("rating"))
+
 
     rating = rating.rename(
         columns={
@@ -31,8 +37,6 @@ def transform_products():
     df = pd.concat([df, rating], axis=1)
 
     # Validate data quality.
-    if df.empty:
-        raise ValueError("The dataset contains no products.")
 
     if df["id"].duplicated().any():
         raise ValueError("Duplicate product IDs were found.")
