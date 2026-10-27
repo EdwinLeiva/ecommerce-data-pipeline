@@ -1,63 +1,57 @@
-# E-Commerce Analytics Data Pipeline
+# Ecommerce Data Pipeline
 
-## Overview
+An end-to-end data engineering project that extracts e-commerce product data from a public API, transforms and validates it with Python and pandas, and loads it into PostgreSQL.
 
-An end-to-end data engineering project that extracts product data from a public API, transforms and validates it with Python, and loads it into PostgreSQL for analysis.
+The project demonstrates ETL development, data quality validation, database integration, automated testing, structured logging, and version control.
 
-The project is designed to demonstrate foundational data engineering skills, including ETL development, data quality validation, database integration, idempotent loading, and version control.
-
-## Architecture
-
-The current pipeline follows this workflow:
+## Project Architecture
 
 ```text
 Fake Store API
       |
       v
-Python Extraction
+   Extraction
       |
       v
-Raw JSON
+data/raw/api/products.json
       |
       v
-Transformation and Data Quality Validation
+ Transformation
       |
       v
-Clean CSV
+Data Quality Validation
       |
       v
-PostgreSQL (Neon)
+data/processed/products_clean.csv
       |
       v
-SQL Analytics (planned)
+ PostgreSQL Loading
+      |
+      v
+  products table
 ```
 
-The pipeline is orchestrated by `src/pipeline.py`, which executes the extraction, transformation, and loading steps in sequence.
-
-## Data Sources
-
-### Current source
-
-- **Fake Store API:** https://fakestoreapi.com/products
-- Provides a sample product catalog used to demonstrate the ETL workflow.
-
-### Planned source
-
-- **Brazilian E-Commerce Public Dataset by Olist:** https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce
-- Intended for a separate analytical workflow using historical Brazilian e-commerce data.
-
-These sources represent different datasets and will be analyzed independently.
+The workflow is orchestrated by `src/pipeline.py`.
 
 ## Technology Stack
 
-- **Python** — pipeline implementation.
-- **pandas** — data transformation and validation.
-- **Requests** — API extraction.
-- **PostgreSQL** — relational data storage.
-- **Neon** — hosted PostgreSQL database.
-- **SQLAlchemy** — database connectivity and SQL execution.
-- **python-dotenv** — local environment configuration.
-- **Git and GitHub** — version control and project hosting.
+- **Python** — ETL implementation
+- **Requests** — API requests
+- **Pandas** — data transformation and validation
+- **PostgreSQL** — relational data storage
+- **SQLAlchemy** — database connectivity and transactions
+- **psycopg** — PostgreSQL driver
+- **python-dotenv** — environment variable management
+- **pytest** — automated testing
+- **Git and GitHub** — version control and project hosting
+
+## Data Source
+
+The current pipeline uses the [Fake Store API](https://fakestoreapi.com/products) to retrieve product data.
+
+The extracted dataset includes product identifiers, titles, prices, descriptions, categories, images, and ratings.
+
+The Olist e-commerce dataset is planned as a separate workflow in a future project stage.
 
 ## Project Structure
 
@@ -71,80 +65,68 @@ ecommerce-data-pipeline/
 │   ├── extract_api.py
 │   ├── transform_products.py
 │   ├── load_postgres.py
-│   ├── test_connection.py
-│   └── pipeline.py
-├── sql/
+│   ├── pipeline.py
+│   └── test_connection.py
 ├── tests/
+│   └── test_transform_products.py
 ├── .env.example
 ├── .gitignore
 ├── requirements.txt
 └── README.md
 ```
 
-Raw and processed data files are generated locally and excluded from version control.
+Generated data files and local environment files are excluded from version control where appropriate.
 
-## Current Implementation
+## ETL Workflow
 
-### 1. Extraction
+### 1. Extract
 
-`src/extract_api.py`
+- Requests product data from the Fake Store API.
+- Uses a request timeout and checks for unsuccessful HTTP responses.
+- Validates the general structure of the API response.
+- Saves the raw response as JSON.
 
-- Retrieves product data from Fake Store API.
-- Checks HTTP errors.
-- Validates that the API response is a list.
-- Saves the response as JSON under `data/raw/api/`.
+### 2. Transform and Validate
 
-### 2. Transformation and data quality
+- Loads the raw JSON data with pandas.
+- Separates nested rating fields into `rating_rate` and `rating_count`.
+- Checks for empty datasets, duplicate product IDs, missing values, negative prices, invalid rating ranges, and negative rating counts.
+- Writes the cleaned dataset to CSV.
 
-`src/transform_products.py`
+### 3. Load
 
-- Loads the raw JSON into pandas.
-- Flattens nested rating fields.
-- Validates that the dataset is not empty.
-- Detects duplicate product IDs and missing values.
-- Checks for negative prices, invalid ratings, and negative rating counts.
-- Exports the transformed dataset to CSV under `data/processed/`.
+- Reads the cleaned CSV file.
+- Validates required columns and rejects empty datasets.
+- Connects to PostgreSQL using SQLAlchemy.
+- Creates the `products` table if it does not exist.
+- Uses `INSERT ... ON CONFLICT (id) DO UPDATE` to insert new products and update existing products.
+- Executes database operations within a transaction.
 
-### 3. Database loading
+### 4. Orchestrate and Monitor
 
-`src/load_postgres.py`
+The `pipeline.py` module runs extraction, transformation, and loading in sequence.
 
-- Reads the cleaned CSV.
-- Validates the required columns.
-- Creates the PostgreSQL `products` table if it does not exist.
-- Inserts new products and updates existing products using `ON CONFLICT (id) DO UPDATE`.
-- Uses a database transaction for the table creation and data load.
+The pipeline uses Python's logging framework to report execution progress, stage completion, and failures. Exceptions are logged and re-raised instead of being silently ignored.
 
-### 4. Pipeline orchestration
+## Data Quality Rules
 
-`src/pipeline.py`
+The transformation stage currently validates:
 
-Runs extraction, transformation, and loading in sequence.
+- The dataset is not empty.
+- Product IDs are unique.
+- Required data does not contain missing values.
+- Product prices are not negative.
+- Ratings are within the 0–5 range.
+- Rating counts are not negative.
 
-### 5. Database connectivity
-
-`src/test_connection.py`
-
-Checks the PostgreSQL connection and retrieves the server version.
-
-## Validation Results
-
-The current end-to-end pipeline has been executed successfully.
-
-- **Products extracted:** 20
-- **Products transformed:** 20
-- **Output columns:** 8
-- **Database destination:** PostgreSQL table `products`
-- **Duplicate handling:** verified by rerunning the load and confirming that existing product IDs are updated instead of duplicated.
-
-These results describe the current sample dataset and may vary if the source API changes.
+Automated tests cover the main transformation rules.
 
 ## Prerequisites
 
-- Python 3.13 or a compatible Python version.
-- Git.
-- A PostgreSQL database. This project currently uses Neon.
-- A local `.env` file containing the database connection string.
+- Python 3.13 or a compatible Python version
+- Git
+- A PostgreSQL database, such as Neon
+- Internet access to reach the source API
 
 ## Setup
 
@@ -157,7 +139,7 @@ cd ecommerce-data-pipeline
 
 ### 2. Create and activate a virtual environment
 
-On Windows PowerShell:
+Windows PowerShell:
 
 ```powershell
 python -m venv .venv
@@ -167,22 +149,16 @@ python -m venv .venv
 ### 3. Install dependencies
 
 ```powershell
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 ```
 
-### 4. Configure the database connection
+### 4. Configure environment variables
 
-Create a local `.env` file in the project root using `.env.example` as a reference.
+Copy `.env.example` to `.env` and set `DATABASE_URL` to your PostgreSQL connection string.
 
-Configure:
+Keep `.env` private. Never commit database credentials or other secrets to GitHub.
 
-```dotenv
-DATABASE_URL=your_postgresql_connection_string
-```
-
-Replace the placeholder with your own connection string. Do not commit the `.env` file or expose database credentials.
-
-### 5. Test the database connection
+### 5. Run the database connection test
 
 ```powershell
 python src/test_connection.py
@@ -190,35 +166,70 @@ python src/test_connection.py
 
 ### 6. Run the complete pipeline
 
-From the project root:
-
 ```powershell
 python src/pipeline.py
 ```
 
-The pipeline extracts the source data, transforms and validates it, and loads the resulting records into PostgreSQL.
+The pipeline retrieves the current API data, transforms it, and loads the results into the PostgreSQL `products` table.
 
-## Security
+### 7. Run automated tests
 
-- Store credentials in a local `.env` file.
-- Never commit secrets or database credentials.
-- Raw and processed data files are excluded from version control.
-- Use `.env.example` to document required environment variables without including real credentials.
+Run the complete test suite:
 
-## Roadmap
+```powershell
+python -m pytest -v
+```
 
-- [x] Set up the repository and Python environment.
-- [x] Extract product data from a public API.
-- [x] Transform and validate product data.
-- [x] Connect to PostgreSQL.
-- [x] Load products with duplicate-safe upsert logic.
-- [x] Orchestrate the complete ETL workflow.
-- [ ] Add structured logging and improved error reporting.
-- [ ] Implement automated tests with pytest.
-- [ ] Develop SQL analytics and document analytical queries.
-- [ ] Automate quality checks with GitHub Actions.
-- [ ] Build a separate workflow for the Olist dataset.
+Run only the transformation tests:
+
+```powershell
+python -m pytest tests/test_transform_products.py -v
+```
+
+The current test suite includes a database connection test and six transformation tests.
+
+## Logging and Error Handling
+
+The ETL modules use Python's standard `logging` library to record progress and errors.
+
+Log messages include timestamps, severity levels, module names, and contextual messages. Failures are logged with exception tracebacks and propagated to the caller.
+
+The project also uses a database transaction and disposes of the SQLAlchemy engine after loading.
+
+## Current Project Status
+
+Implemented:
+
+- Repository and Python environment setup
+- Public API extraction
+- Data transformation and quality validation
+- PostgreSQL connectivity
+- Duplicate-safe upsert loading
+- ETL orchestration
+- Structured logging and improved error reporting
+- Automated tests with pytest
+
+Planned:
+
+- SQL analytics and documented analytical queries
+- Automated quality checks with GitHub Actions
+- A separate ETL workflow for the Olist dataset
+
+## Future Improvements
+
+- Add integration tests for PostgreSQL loading.
+- Add more validation tests for malformed or incomplete source data.
+- Add pipeline execution metrics and duration tracking.
+- Automate test execution with GitHub Actions.
+- Develop documented SQL queries for business analysis.
+- Build a separate workflow for the Olist dataset.
+
+## License
+
+A license has not yet been specified for this project.
 
 ## Author
 
-Edwin Leiva
+**Edwin Leiva**
+
+Data Engineering portfolio project focused on ETL pipelines, data quality, Python, and PostgreSQL.
